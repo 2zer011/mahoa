@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 Mã Hóa & Giải Mã Ký Tự</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="background-effects">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+    
+    <div class="container">
+        <header class="header">
+            <div class="logo">
+                <span class="logo-icon">🔐</span>
+                <h1>Encoder & Decoder</h1>
+            </div>
+            <p class="subtitle">Chuyển đổi chữ cái và số thành chuỗi ký tự bí ẩn</p>
+        </header>
+
+        <div class="mode-switcher">
+            <button class="mode-btn active" data-mode="encode">
+                <span class="btn-icon">🔒</span>
+                <span>Mã Hóa</span>
+            </button>
+            <button class="mode-btn" data-mode="decode">
+                <span class="btn-icon">🔓</span>
+                <span>Giải Mã</span>
+            </button>
+        </div>
+
+        <main class="main-content">
+            <div class="input-section">
+                <div class="section-header">
+                    <h2 id="input-label">📝 Nhập văn bản cần mã hóa</h2>
+                    <span class="char-count">0 ký tự</span>
+                </div>
+                <textarea id="input-text" placeholder="Nhập chữ cái (a-z) và số (0-9) tại đây..."></textarea>
+            </div>
+
+            <button class="convert-btn" id="convert-btn">
+                <span class="convert-icon">⚡</span>
+                <span id="convert-text">Mã Hóa Ngay</span>
+            </button>
+
+            <div class="output-section">
+                <div class="section-header">
+                    <h2 id="output-label">🎯 Kết quả mã hóa</h2>
+                    <button class="copy-btn" id="copy-btn" title="Sao chép">
+                        <span>📋</span>
+                    </button>
+                </div>
+                <div class="output-container">
+                    <pre id="output-text"></pre>
+                </div>
+            </div>
+        </main>
+
+        <div class="info-panel">
+            <div class="info-card">
+                <span class="info-icon">💡</span>
+                <div class="info-content">
+                    <h3>Hướng dẫn sử dụng</h3>
+                    <ul>
+                        <li>Mỗi ký tự (a-z, 0-9) được mã hóa thành chuỗi 10 ký tự</li>
+                        <li>Chữ hoa tự động chuyển thành chữ thường</li>
+                        <li>Các ký tự không hợp lệ sẽ bị bỏ qua</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>✨ Được tạo với sự sáng tạo</p>
+        </footer>
+    </div>
+
+    <div class="toast" id="toast">
+        <span class="toast-icon">✅</span>
+        <span class="toast-text">Đã sao chép!</span>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
