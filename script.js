@@ -123,10 +123,93 @@ function updateUI() {
 }
 
 // Cấu hình mã hóa
-const VERSION_PREFIX = 'v2_';
-const CHUNK_SIZE = 10;
+const CHUNK_SIZE_V2 = 10;
+const V4_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~';
 
-// Hàm xoay chuỗi để tăng cường bảo mật
+// --- Hệ thống mã hóa v5 (Hyper-Expansion 100,000 loops) ---
+// --- Hệ thống mã hóa v6 (Randomized Hyper-Expansion) ---
+const VERSION_PREFIX = 'v6_';
+// Bảng chữ cái 256 ký tự duy nhất (Xử lý dưới dạng mảng để tránh lỗi Emoji surrogate pairs)
+const V5_ALPHABET = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;':\",.<>/?`~ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯưẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỈịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹ✨🌟🔥🌈🍀💎🍎🚀💡🎉🎸🎮👾🤖👻🐲🌍🌈☀️⭐🌙🌑🌓🌔🌕🌻🌷🌼🌸🌹🍀🍎🍊🍋🍓🍇🍒🍍🥝🌽🍆🍅🌶️🍔🍟🍕🌭🥪🌮🌯🥗🍿🍱🍣🍜🍛🍚🍦🍰🍩🍪🍫🍬🍭🍯🥛☕🍵🍶🍷🍹🍺🍻🥂🥃🥤🥢🍵🍳🧂🥣🥄🍴");
+
+function v5_get_shift(pos) {
+    let state = 2024; // Seed cố định
+    for (let i = 0; i < 100000; i++) {
+        state = (state ^ (i + pos)) + (state << 1) ^ (state >> 3);
+        state = (state & 0xFFFFFFFF) >>> 0;
+    }
+    return state;
+}
+
+function v5_hyper_expansion(char, pos, saltIdx = 0) {
+    let inputIdx = char.charCodeAt(0) % 256;
+    let shift = v5_get_shift(pos);
+    // V6: Cộng thêm salt vào shift để tạo sự ngẫu nhiên
+    let outputIdx = (inputIdx + (shift % 256) + saltIdx) % 256;
+    return V5_ALPHABET[outputIdx];
+}
+
+function v5_reverse_lookup(targetChar, pos, saltIdx = 0) {
+    let outputIdx = V5_ALPHABET.indexOf(targetChar);
+    if (outputIdx === -1) return '?';
+
+    let shift = v5_get_shift(pos);
+    // V6: Trừ đi cả salt để quay về index gốc
+    let inputIdx = (outputIdx - (shift % 256) - saltIdx + 512) % 256; // +512 để đảm bảo kết quả dương trước khi modulo
+    return String.fromCharCode(inputIdx);
+}
+
+// --- Các hệ thống cũ (Hỗ trợ giải mã) ---
+function v4_pass1(char) {
+    // 1 ký tự -> 10 số (dựa trên CharCode)
+    const code = char.charCodeAt(0);
+    let res = [];
+    for (let i = 0; i < 10; i++) res.push((code + i * 7) % 256);
+    return res;
+}
+
+function v4_pass2(arr) {
+    // 10 số -> 20 số
+    let res = [...arr];
+    for (let i = 0; i < 10; i++) res.push((arr[i] * 3 + 13) % 256);
+    return res;
+}
+
+function v4_pass3(arr) {
+    // 20 số -> 30 số
+    let res = [...arr];
+    for (let i = 0; i < 10; i++) res.push((arr[i] ^ arr[i + 1] ^ 0xFF) % 256);
+    return res;
+}
+
+function v4_pass4(arr) {
+    // 30 số -> 40 số
+    let res = [...arr];
+    for (let i = 0; i < 10; i++) res.push((arr[i] << 1 | arr[i] >> 7) % 256);
+    return res;
+}
+
+function v4_pass5(arr) {
+    // 40 số -> 50 số
+    let res = [...arr];
+    for (let i = 0; i < 10; i++) res.push((arr[i] + arr[i + 1] + i) % 256);
+    return res;
+}
+
+function v4_pass6_compact(arr, pos) {
+    // Nén 50 số thành 4 ký tự ngắn gọn (Lớp 6)
+    // Sử dụng thuật toán băm (hashing) đơn giản để lấy 4 giá trị đại diện
+    let h1 = 0, h2 = 0, h3 = 0, h4 = 0;
+    for (let i = 0; i < 50; i++) {
+        if (i % 4 === 0) h1 = (h1 + arr[i]) % 64;
+        else if (i % 4 === 1) h2 = (h2 + arr[i] + pos) % 64;
+        else if (i % 4 === 2) h3 = (h3 ^ arr[i]) % 64;
+        else h4 = (h4 + arr[i] * 2) % 64;
+    }
+    return V4_CHARSET[h1] + V4_CHARSET[h2] + V4_CHARSET[h3] + V4_CHARSET[h4];
+}
+
+// Hàm xoay chuỗi (Dành cho v2)
 function rotateString(str, count) {
     count = count % str.length;
     if (count === 0) return str;
@@ -142,20 +225,20 @@ function unrotateString(str, count) {
 
 // Hàm mã hóa
 function encode(text) {
-    let result = [VERSION_PREFIX];
-    const cleanText = text.toLowerCase();
+    // 1. Sinh Salt ngẫu nhiên (chọn 1 ký tự từ bảng alphabet v5)
+    const saltIdx = Math.floor(Math.random() * V5_ALPHABET.length);
+    const saltChar = V5_ALPHABET[saltIdx];
 
-    for (let i = 0; i < cleanText.length; i++) {
-        const char = cleanText[i];
-        if (ENCODING_TABLE[char]) {
-            let code = ENCODING_TABLE[char];
-            // Xoay ký tự dựa trên vị trí của nó (Lớp 2)
-            let rotatedCode = rotateString(code, i + 1);
-            result.push(rotatedCode);
-        }
+    let result = [VERSION_PREFIX, saltChar];
+
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        // 2. Mã hóa với Salt đã chọn
+        let compact = v5_hyper_expansion(char, i, saltIdx);
+        result.push(compact);
     }
 
-    if (result.length === 1) return ''; // Chỉ có prefix
+    if (result.length === 2) return ''; // Nếu chỉ có tiền tố và salt, không có dữ liệu
     return result.join('');
 }
 
@@ -164,33 +247,82 @@ function decode(text) {
     let result = [];
     let cleanText = text.trim();
 
-    // Kiểm tra xem có phải định dạng v2 không
-    if (cleanText.startsWith(VERSION_PREFIX)) {
-        const data = cleanText.substring(VERSION_PREFIX.length);
+    // --- Giải mã v6 (Randomized) ---
+    if (cleanText.startsWith('v6_')) {
+        const saltChar = cleanText.substring(3, 4);
+        const saltIdx = V5_ALPHABET.indexOf(saltChar);
+        const data = Array.from(cleanText.substring(4));
+
+        for (let i = 0; i < data.length; i++) {
+            result.push(v5_reverse_lookup(data[i], i, saltIdx));
+        }
+        return result.join('');
+    }
+
+    // --- Giải mã v5 (Static) ---
+    if (cleanText.startsWith('v5_')) {
+        const data = Array.from(cleanText.substring(3));
+        for (let i = 0; i < data.length; i++) {
+            result.push(v5_reverse_lookup(data[i], i, 0)); // Salt mặc định = 0
+        }
+        return result.join('');
+    }
+
+    // --- Giải mã v4 ---
+    if (cleanText.startsWith('v4_')) {
+        const data = cleanText.substring(3);
+        for (let i = 0; i < data.length; i += 4) {
+            const chunk = data.substring(i, i + 4);
+            if (chunk.length === 4) {
+                // Với v4, vì sử dụng hàm băm (hashing) có va chạm để nén, 
+                // ta sẽ tìm ngược lại trong bảng alphabet để giải mã.
+                // Tìm ký tự nào khi qua 6 bước mã hóa cho ra kết quả này.
+                let found = false;
+                for (let charCode = 0; charCode < 256; charCode++) {
+                    let char = String.fromCharCode(charCode);
+                    let test_p1 = v4_pass1(char);
+                    let test_p2 = v4_pass2(test_p1);
+                    let test_p3 = v4_pass3(test_p2);
+                    let test_p4 = v4_pass4(test_p3);
+                    let test_p5 = v4_pass5(test_p4);
+                    let test_compact = v4_pass6_compact(test_p5, result.length);
+
+                    if (test_compact === chunk) {
+                        result.push(char);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) result.push('?');
+            }
+        }
+        return result.join('');
+    }
+
+    // --- Giải mã v2 ---
+    if (cleanText.startsWith('v2_')) {
+        const data = cleanText.substring(3);
         let charIndex = 0;
-
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-            const chunk = data.substring(i, i + CHUNK_SIZE);
-            if (chunk.length === CHUNK_SIZE) {
-                // Xoay ngược lại dựa trên vị trí (Lớp 2)
+        for (let i = 0; i < data.length; i += CHUNK_SIZE_V2) {
+            const chunk = data.substring(i, i + CHUNK_SIZE_V2);
+            if (chunk.length === CHUNK_SIZE_V2) {
                 const unrotatedChunk = unrotateString(chunk, charIndex + 1);
-
                 if (DECODING_TABLE[unrotatedChunk]) {
                     result.push(DECODING_TABLE[unrotatedChunk]);
                 } else {
-                    // Nếu không tìm thấy trong bảng, có thể do dữ liệu lỗi
                     result.push('?');
                 }
                 charIndex++;
             }
         }
-    } else {
-        // Hỗ trợ giải mã phiên bản cũ (v1 - không có prefix)
-        for (let i = 0; i < cleanText.length; i += CHUNK_SIZE) {
-            const chunk = cleanText.substring(i, i + CHUNK_SIZE);
-            if (chunk.length === CHUNK_SIZE && DECODING_TABLE[chunk]) {
-                result.push(DECODING_TABLE[chunk]);
-            }
+        return result.join('');
+    }
+
+    // --- Giải mã v1 (Hỗ trợ cũ) ---
+    for (let i = 0; i < cleanText.length; i += 10) {
+        const chunk = cleanText.substring(i, i + 10);
+        if (chunk.length === 10 && DECODING_TABLE[chunk]) {
+            result.push(DECODING_TABLE[chunk]);
         }
     }
 
