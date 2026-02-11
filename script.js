@@ -128,9 +128,9 @@ const V4_CHARSET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01234567
 
 // --- Hệ thống mã hóa v5 (Hyper-Expansion 100,000 loops) ---
 // --- Hệ thống mã hóa v6 (Randomized Hyper-Expansion) ---
-const VERSION_PREFIX = 'v6_';
+const VERSION_PREFIX = 'v36_';
 // Bảng chữ cái 256 ký tự duy nhất (Xử lý dưới dạng mảng để tránh lỗi Emoji surrogate pairs)
-const V5_ALPHABET = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;':\",.<>/?`~ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯưẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỈịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹ✨🌟🔥🌈🍀💎🍎🚀💡🎉🎸🎮👾🤖👻🐲🌍🌈☀️⭐🌙🌑🌓🌔🌕🌻🌷🌼🌸🌹🍀🍎🍊🍋🍓🍇🍒🍍🥝🌽🍆🍅🌶️🍔🍟🍕🌭🥪🌮🌯🥗🍿🍱🍣🍜🍛🍚🍦🍰🍩🍪🍫🍬🍭🍯🥛☕🍵🍶🍷🍹🍺🍻🥂🥃🥤🥢🍵🍳🧂🥣🥄🍴");
+const V5_ALPHABET = Array.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+-=[]{}|;':\",.<>/?`~ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝàáâãèéêìíòóôõùúýĂăĐđĨĩŨũƠơƯưẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹ✨🌟🔥🌈🍀💎🍎🚀💡🎉🎸🎮👾🤖👻🐲🌍☀️⭐🌙🌑🌓🌔🌕🌻🌷🌼🌸🌹");
 
 function v5_get_shift(pos) {
     let state = 2024; // Seed cố định
@@ -151,12 +151,12 @@ function v5_hyper_expansion(char, pos, saltIdx = 0) {
 
 function v5_reverse_lookup(targetChar, pos, saltIdx = 0) {
     let outputIdx = V5_ALPHABET.indexOf(targetChar);
-    if (outputIdx === -1) return '?';
+    if (outputIdx === -1) return -1;
 
     let shift = v5_get_shift(pos);
     // V6: Trừ đi cả salt để quay về index gốc
     let inputIdx = (outputIdx - (shift % 256) - saltIdx + 512) % 256; // +512 để đảm bảo kết quả dương trước khi modulo
-    return String.fromCharCode(inputIdx);
+    return inputIdx;
 }
 
 // --- Các hệ thống cũ (Hỗ trợ giải mã) ---
@@ -231,10 +231,14 @@ function encode(text) {
 
     let result = [VERSION_PREFIX, saltChar];
 
-    for (let i = 0; i < text.length; i++) {
-        const char = text[i];
+    // FIX: Sử dụng TextEncoder để hỗ trợ đầy đủ Unicode (dấu, hoa/thường)
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(text);
+
+    for (let i = 0; i < bytes.length; i++) {
+        const byte = bytes[i];
         // 2. Mã hóa với Salt đã chọn
-        let compact = v5_hyper_expansion(char, i, saltIdx);
+        let compact = v5_hyper_expansion(String.fromCharCode(byte), i, saltIdx);
         result.push(compact);
     }
 
@@ -247,23 +251,35 @@ function decode(text) {
     let result = [];
     let cleanText = text.trim();
 
-    // --- Giải mã v6 (Randomized) ---
-    if (cleanText.startsWith('v6_')) {
-        const saltChar = cleanText.substring(3, 4);
-        const saltIdx = V5_ALPHABET.indexOf(saltChar);
-        const data = Array.from(cleanText.substring(4));
+    // --- Giải mã v36 (Mới) ---
+    if (cleanText.startsWith('v36_') || cleanText.startsWith('v6_')) {
+        const isV36 = cleanText.startsWith('v36_');
+        const prefixOffset = isV36 ? 4 : 3;
+        const charsAfterPrefix = Array.from(cleanText.substring(prefixOffset));
+        if (charsAfterPrefix.length < 1) return '';
 
+        const saltChar = charsAfterPrefix[0];
+        const saltIdx = V5_ALPHABET.indexOf(saltChar);
+        const data = charsAfterPrefix.slice(1);
+
+        const bytes = new Uint8Array(data.length);
         for (let i = 0; i < data.length; i++) {
-            result.push(v5_reverse_lookup(data[i], i, saltIdx));
+            bytes[i] = v5_reverse_lookup(data[i], i, saltIdx);
         }
-        return result.join('');
+
+        try {
+            return new TextDecoder().decode(bytes);
+        } catch (e) {
+            return "Lỗi giải mã UTF-8";
+        }
     }
 
     // --- Giải mã v5 (Static) ---
     if (cleanText.startsWith('v5_')) {
         const data = Array.from(cleanText.substring(3));
         for (let i = 0; i < data.length; i++) {
-            result.push(v5_reverse_lookup(data[i], i, 0)); // Salt mặc định = 0
+            const charCode = v5_reverse_lookup(data[i], i, 0); // Salt mặc định = 0
+            result.push(String.fromCharCode(charCode));
         }
         return result.join('');
     }
